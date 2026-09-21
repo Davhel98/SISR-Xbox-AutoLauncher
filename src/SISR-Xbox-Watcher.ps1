@@ -175,7 +175,10 @@ function Update-TrackedState {
 }
 
 function Start-OwnedSisr {
-    $process = Start-Process -FilePath $script:sisrPath -PassThru
+    $process = Start-Process `
+        -FilePath $script:sisrPath `
+        -WorkingDirectory $script:sisrWorkingDirectory `
+        -PassThru
     try {
         $script:ownedSisrProcessId = $process.Id
     }
@@ -183,7 +186,7 @@ function Start-OwnedSisr {
         $process.Dispose()
     }
 
-    Write-Log "Xbox game detected; SISR started (PID=$script:ownedSisrProcessId)."
+    Write-Log "Xbox game detected; SISR started (PID=$script:ownedSisrProcessId; WorkingDirectory=$script:sisrWorkingDirectory)."
 }
 
 function Ensure-SisrForTrackedGames {
@@ -227,7 +230,16 @@ function Stop-OwnedSisrIfIdle {
     })
 
     if ($ownedProcess.Count -gt 0) {
-        Stop-Process -Id $ownedPid -Force -ErrorAction Stop
+        $process = Get-Process -Id $ownedPid -ErrorAction Stop
+        try {
+            $closedGracefully = $process.CloseMainWindow()
+            if (-not $closedGracefully -or -not $process.WaitForExit(5000)) {
+                Stop-Process -Id $ownedPid -Force -ErrorAction Stop
+            }
+        }
+        finally {
+            $process.Dispose()
+        }
         Write-Log "No Xbox games remain; SISR stopped (PID=$ownedPid)."
     }
 
@@ -343,6 +355,7 @@ try {
     $script:xboxRoot = Get-NormalizedPath ([string]$config.XboxGamesPath)
     $script:xboxPrefix = $script:xboxRoot + [IO.Path]::DirectorySeparatorChar
     $script:sisrPath = Get-NormalizedPath ([string]$config.SisrPath)
+    $script:sisrWorkingDirectory = Split-Path -Path $script:sisrPath -Parent
     $script:shutdownDebounceSeconds = if ($null -ne $config.ShutdownDebounceSeconds) {
         [Math]::Max(0, [int]$config.ShutdownDebounceSeconds)
     } else { 5 }

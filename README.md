@@ -29,6 +29,8 @@ The Scheduled Task runs with the normal permissions of the signed-in user; admin
 
 SISR is only stopped automatically if this watcher started it. If SISR was already running manually, it is left running.
 
+SISR is launched with its installation directory as the working directory so that its `viiper.exe` backend and accompanying files are resolved exactly as they are during a manual launch.
+
 A short shutdown debounce (default: 5 seconds) avoids stopping SISR during launcher/anti-cheat process transitions.
 
 The event-driven mode also reconciles its state periodically so that a missed or inaccessible process event cannot leave SISR in the wrong state.
