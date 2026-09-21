@@ -26,6 +26,14 @@ while ([string]::IsNullOrWhiteSpace($SisrPath) -or -not (Test-Path -LiteralPath 
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
+# Stop an existing installation before replacing its scripts. Starting an
+# already-running Scheduled Task would otherwise leave the old watcher active.
+foreach ($ExistingTaskName in @($TaskName, $CleanupTaskName)) {
+    if (Get-ScheduledTask -TaskName $ExistingTaskName -ErrorAction SilentlyContinue) {
+        Stop-ScheduledTask -TaskName $ExistingTaskName -ErrorAction SilentlyContinue
+    }
+}
+
 Write-Host "Downloading watcher and log cleanup scripts..."
 Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-Watcher.ps1" -OutFile $WatcherPath
 Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-LogCleanup.ps1" -OutFile $CleanupPath
@@ -34,6 +42,7 @@ $config = [ordered]@{
     XboxGamesPath = [IO.Path]::GetFullPath($XboxGamesPath)
     SisrPath = [IO.Path]::GetFullPath($SisrPath)
     ShutdownDebounceSeconds = 5
+    PollingIntervalSeconds = 1
 }
 $config | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
 

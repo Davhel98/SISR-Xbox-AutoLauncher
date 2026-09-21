@@ -21,11 +21,15 @@ It installs the watcher and maintenance scripts under `%LOCALAPPDATA%\SISRXboxAu
 
 ## How it works
 
-The watcher subscribes to Windows process start/stop events and checks running executable paths. Any executable below the configured Xbox Games root counts as an Xbox game.
+The watcher uses `System.Management.ManagementEventWatcher` with the non-elevated WMI intrinsic events `__InstanceCreationEvent` and `__InstanceDeletionEvent`. Any running executable below the configured Xbox Games root counts as an Xbox game.
+
+The Scheduled Task runs with the normal permissions of the signed-in user; administrator privileges are not required. If WMI event subscriptions are unavailable in a restricted environment, the watcher automatically falls back to lightweight process polling instead of exiting.
 
 SISR is only stopped automatically if this watcher started it. If SISR was already running manually, it is left running.
 
 A short shutdown debounce (default: 5 seconds) avoids stopping SISR during launcher/anti-cheat process transitions.
+
+The event-driven mode also reconciles its state periodically so that a missed or inaccessible process event cannot leave SISR in the wrong state.
 
 ## Automatic log cleanup
 
@@ -45,7 +49,8 @@ Example:
 {
   "XboxGamesPath": "D:\\XboxGames",
   "SisrPath": "C:\\Path\\To\\SISR.exe",
-  "ShutdownDebounceSeconds": 5
+  "ShutdownDebounceSeconds": 5,
+  "PollingIntervalSeconds": 1
 }
 ```
 
@@ -54,6 +59,8 @@ Re-run the installer to update the watcher, cleanup script, or configured paths.
 ## Logs
 
 `%LOCALAPPDATA%\SISRXboxAutoLauncher\logs\watcher.log`
+
+The log records the selected monitoring mode, Xbox process transitions, SISR start/stop actions, fallback activation, and fatal errors.
 
 ## SISR
 
