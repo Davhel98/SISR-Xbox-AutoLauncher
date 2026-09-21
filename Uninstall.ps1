@@ -1,14 +1,19 @@
 $ErrorActionPreference = "Stop"
-$TaskName = "SISR Xbox AutoLauncher"
+$TaskNames = @(
+    "SISR Xbox AutoLauncher",
+    "SISR Xbox AutoLauncher Log Cleanup"
+)
 $InstallDir = Join-Path $env:LOCALAPPDATA "SISRXboxAutoLauncher"
 
 Write-Host "=== SISR Xbox AutoLauncher Uninstaller ===" -ForegroundColor Cyan
 
-$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($task) {
-    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-    Write-Host "Scheduled task removed."
+foreach ($TaskName in $TaskNames) {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task) {
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+        Write-Host "Scheduled task removed: $TaskName"
+    }
 }
 
 if (Test-Path $InstallDir) {
