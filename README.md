@@ -55,6 +55,20 @@ Re-run the installer to update the watcher, cleanup script, or configured paths.
 
 `%LOCALAPPDATA%\SISRXboxAutoLauncher\logs\watcher.log`
 
+## SISR
+
+This project is an independent helper utility for [SISR (Steam Input System Redirector)](https://github.com/Alia5/SISR).
+
+SISR is developed by Peter Repukat (Alia5) and is distributed under its own license, the GNU General Public License v3.0 or later.
+
+SISR Xbox AutoLauncher is not affiliated with, endorsed by, or part of the official SISR project. This repository does not distribute or contain SISR itself. Users must obtain SISR separately from the official SISR project.
+
+## License
+
+SISR Xbox AutoLauncher is released under the MIT License. See [LICENSE](LICENSE).
+
+The MIT License applies only to SISR Xbox AutoLauncher and does not apply to SISR or other third-party software.
+
 ## Uninstall
 
 ```powershell
