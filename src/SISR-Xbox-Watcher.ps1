@@ -3,6 +3,8 @@ param([string]$ConfigPath = "$env:LOCALAPPDATA\SISRXboxAutoLauncher\config.json"
 $ErrorActionPreference = "Stop"
 
 $script:xboxProcessIds = New-Object 'System.Collections.Generic.HashSet[int]'
+$script:xboxPackageFullNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$script:nextPackageMapRefresh = [DateTime]::MinValue
 $script:ownedSisrProcessId = $null
 $script:creationWatcher = $null
 $script:deletionWatcher = $null
@@ -39,8 +41,68 @@ function Get-NormalizedPath {
 function Test-XboxExecutablePath {
     param([AllowNull()][string]$ExecutablePath)
 
-    (-not [string]::IsNullOrWhiteSpace($ExecutablePath)) -and
-        $ExecutablePath.StartsWith($script:xboxPrefix, [StringComparison]::OrdinalIgnoreCase)
+    if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
+        return $false
+    }
+
+    if ($ExecutablePath.StartsWith($script:xboxPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+
+    # Xbox/GDK games installed below XboxGames may be projected by Windows as
+    # C:\Program Files\WindowsApps\<PackageFullName> when they are running.
+    $packageMatch = [regex]::Match(
+        $ExecutablePath,
+        '(?i)[\\/]+WindowsApps[\\/]+(?<Package>[^\\/]+)(?:[\\/]|$)'
+    )
+
+    $packageMatch.Success -and
+        $script:xboxPackageFullNames.Contains($packageMatch.Groups['Package'].Value)
+}
+
+function Update-XboxPackageMap {
+    param([switch]$Force)
+
+    if (-not $Force -and [DateTime]::UtcNow -lt $script:nextPackageMapRefresh) {
+        return
+    }
+
+    $script:nextPackageMapRefresh = [DateTime]::UtcNow.AddMinutes(5)
+    $contentIds = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $markerPattern = '^(?<Id>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})(?:\.|$)'
+
+    foreach ($gameDirectory in Get-ChildItem -LiteralPath $script:xboxRoot -Directory -Force -ErrorAction SilentlyContinue) {
+        foreach ($entry in Get-ChildItem -LiteralPath $gameDirectory.FullName -Force -ErrorAction SilentlyContinue) {
+            $markerMatch = [regex]::Match($entry.Name, $markerPattern)
+            if ($markerMatch.Success) {
+                $contentIds.Add($markerMatch.Groups['Id'].Value) | Out-Null
+            }
+        }
+    }
+
+    $packages = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $packageRepositoryPath = 'HKLM:\SOFTWARE\Microsoft\GamingServices\PackageRepository\Package'
+
+    try {
+        $packageRepository = Get-Item -LiteralPath $packageRepositoryPath -ErrorAction Stop
+        foreach ($packageFullName in $packageRepository.GetValueNames()) {
+            $registration = [string]$packageRepository.GetValue($packageFullName)
+            $contentMatch = [regex]::Match(
+                $registration,
+                '#\{(?<Id>[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\}$'
+            )
+
+            if ($contentMatch.Success -and $contentIds.Contains($contentMatch.Groups['Id'].Value)) {
+                $packages.Add($packageFullName) | Out-Null
+            }
+        }
+    }
+    catch {
+        Write-Log ("Xbox package mapping unavailable; direct path detection remains active. {0}: {1}" -f $_.Exception.GetType().FullName, $_.Exception.Message) "WARN"
+    }
+
+    $script:xboxPackageFullNames = $packages
+    Write-Log "Xbox package map refreshed. ContentIds=$($contentIds.Count); Packages=$($packages.Count)."
 }
 
 function Test-SisrExecutablePath {
@@ -78,12 +140,26 @@ function Get-RunningProcessSnapshots {
 function Update-TrackedState {
     param([Parameter(Mandatory = $true)][object[]]$Snapshots)
 
-    $script:xboxProcessIds.Clear()
+    $previousProcessIds = @($script:xboxProcessIds)
+    $currentProcessIds = New-Object 'System.Collections.Generic.HashSet[int]'
+
     foreach ($snapshot in $Snapshots) {
         if (Test-XboxExecutablePath $snapshot.ExecutablePath) {
-            $script:xboxProcessIds.Add([int]$snapshot.ProcessId) | Out-Null
+            $processId = [int]$snapshot.ProcessId
+            $currentProcessIds.Add($processId) | Out-Null
+            if ($previousProcessIds -notcontains $processId) {
+                Write-Log "Xbox process detected during state reconciliation (PID=$processId): $($snapshot.ExecutablePath)"
+            }
         }
     }
+
+    foreach ($previousProcessId in $previousProcessIds) {
+        if (-not $currentProcessIds.Contains([int]$previousProcessId)) {
+            Write-Log "Xbox process no longer active during state reconciliation (PID=$previousProcessId)."
+        }
+    }
+
+    $script:xboxProcessIds = $currentProcessIds
 
     if ($null -ne $script:ownedSisrProcessId) {
         $ownedSisrStillRunning = @($Snapshots | Where-Object {
@@ -159,6 +235,7 @@ function Stop-OwnedSisrIfIdle {
 }
 
 function Sync-State {
+    Update-XboxPackageMap
     $snapshots = @(Get-RunningProcessSnapshots)
     Update-TrackedState $snapshots
 
@@ -282,6 +359,7 @@ try {
     }
 
     Write-Log "Watcher started. XboxGamesPath=$script:xboxRoot; SisrPath=$script:sisrPath"
+    Update-XboxPackageMap -Force
 
     $eventWatchersAvailable = $false
     try {

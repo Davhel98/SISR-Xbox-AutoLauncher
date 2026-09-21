@@ -23,6 +23,8 @@ It installs the watcher and maintenance scripts under `%LOCALAPPDATA%\SISRXboxAu
 
 The watcher uses `System.Management.ManagementEventWatcher` with the non-elevated WMI intrinsic events `__InstanceCreationEvent` and `__InstanceDeletionEvent`. Any running executable below the configured Xbox Games root counts as an Xbox game.
 
+Some Xbox/GDK games installed under `XboxGames` are exposed as running from `C:\Program Files\WindowsApps` instead of their visible installation path. The watcher resolves these projected paths through the local Gaming Services package repository and the Content ID markers stored in each Xbox game directory. No per-game process list is required.
+
 The Scheduled Task runs with the normal permissions of the signed-in user; administrator privileges are not required. If WMI event subscriptions are unavailable in a restricted environment, the watcher automatically falls back to lightweight process polling instead of exiting.
 
 SISR is only stopped automatically if this watcher started it. If SISR was already running manually, it is left running.
