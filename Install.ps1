@@ -7,8 +7,10 @@ $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/Davhel98/SISR-Xbox-AutoLauncher/main"
 $InstallDir = Join-Path $env:LOCALAPPDATA "SISRXboxAutoLauncher"
 $WatcherPath = Join-Path $InstallDir "SISR-Xbox-Watcher.ps1"
+$CleanupPath = Join-Path $InstallDir "SISR-Xbox-LogCleanup.ps1"
 $ConfigPath = Join-Path $InstallDir "config.json"
 $TaskName = "SISR Xbox AutoLauncher"
+$CleanupTaskName = "SISR Xbox AutoLauncher Log Cleanup"
 
 Write-Host "=== SISR Xbox AutoLauncher Installer ===" -ForegroundColor Cyan
 
@@ -24,8 +26,9 @@ while ([string]::IsNullOrWhiteSpace($SisrPath) -or -not (Test-Path -LiteralPath 
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Write-Host "Downloading watcher..."
+Write-Host "Downloading watcher and log cleanup scripts..."
 Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-Watcher.ps1" -OutFile $WatcherPath
+Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-LogCleanup.ps1" -OutFile $CleanupPath
 
 $config = [ordered]@{
     XboxGamesPath = [IO.Path]::GetFullPath($XboxGamesPath)
@@ -35,16 +38,24 @@ $config = [ordered]@{
 $config | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
 
 $ps = (Get-Command powershell.exe).Source
-$arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WatcherPath`" -ConfigPath `"$ConfigPath`""
-$action = New-ScheduledTaskAction -Execute $ps -Argument $arguments
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description "Starts/stops SISR automatically while Xbox games are running." -Force | Out-Null
+$watcherArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WatcherPath`" -ConfigPath `"$ConfigPath`""
+$watcherAction = New-ScheduledTaskAction -Execute $ps -Argument $watcherArguments
+$watcherTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+Register-ScheduledTask -TaskName $TaskName -Action $watcherAction -Trigger $watcherTrigger -Settings $settings -Description "Starts/stops SISR automatically while Xbox games are running." -Force | Out-Null
+
+$cleanupArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$CleanupPath`""
+$cleanupAction = New-ScheduledTaskAction -Execute $ps -Argument $cleanupArguments
+$cleanupTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+Register-ScheduledTask -TaskName $CleanupTaskName -Action $cleanupAction -Trigger $cleanupTrigger -Settings $settings -Description "Deletes SISR Xbox AutoLauncher log files older than 24 hours at user logon." -Force | Out-Null
+
+Start-ScheduledTask -TaskName $CleanupTaskName
 Start-ScheduledTask -TaskName $TaskName
 
 Write-Host ""
 Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "Xbox games: $($config.XboxGamesPath)"
 Write-Host "SISR:       $($config.SisrPath)"
-Write-Host "Task:       $TaskName"
+Write-Host "Watcher:    $TaskName"
+Write-Host "Log cleanup:$CleanupTaskName"
