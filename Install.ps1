@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/Davhel98/SISR-Xbox-AutoLauncher/main"
 $InstallDir = Join-Path $env:LOCALAPPDATA "SISRXboxAutoLauncher"
+$LauncherPath = Join-Path $InstallDir "SISR-Xbox-Launcher.vbs"
 $WatcherPath = Join-Path $InstallDir "SISR-Xbox-Watcher.ps1"
 $CleanupPath = Join-Path $InstallDir "SISR-Xbox-LogCleanup.ps1"
 $ConfigPath = Join-Path $InstallDir "config.json"
@@ -34,7 +35,8 @@ foreach ($ExistingTaskName in @($TaskName, $CleanupTaskName)) {
     }
 }
 
-Write-Host "Downloading watcher and log cleanup scripts..."
+Write-Host "Downloading launcher, watcher, and log cleanup scripts..."
+Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-Launcher.vbs" -OutFile $LauncherPath
 Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-Watcher.ps1" -OutFile $WatcherPath
 Invoke-WebRequest -UseBasicParsing -Uri "$RepoRaw/src/SISR-Xbox-LogCleanup.ps1" -OutFile $CleanupPath
 
@@ -46,11 +48,12 @@ $config = [ordered]@{
 }
 $config | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
 
+$wscript = Join-Path $env:WINDIR "System32\wscript.exe"
 $ps = (Get-Command powershell.exe).Source
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 
-$watcherArguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$WatcherPath`" -ConfigPath `"$ConfigPath`""
-$watcherAction = New-ScheduledTaskAction -Execute $ps -Argument $watcherArguments
+$watcherArguments = "//B //NoLogo `"$LauncherPath`""
+$watcherAction = New-ScheduledTaskAction -Execute $wscript -Argument $watcherArguments -WorkingDirectory $InstallDir
 $watcherTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 Register-ScheduledTask -TaskName $TaskName -Action $watcherAction -Trigger $watcherTrigger -Settings $settings -Description "Starts/stops SISR automatically while Xbox games are running." -Force | Out-Null
 

@@ -15,7 +15,7 @@ The installer asks for:
 1. The common Xbox Games directory, for example `D:\XboxGames`.
 2. The full path to the SISR executable.
 
-It installs the watcher and maintenance scripts under `%LOCALAPPDATA%\SISRXboxAutoLauncher` and creates Scheduled Tasks that run at user logon.
+It installs the hidden launcher, watcher, and maintenance scripts under `%LOCALAPPDATA%\SISRXboxAutoLauncher` and creates Scheduled Tasks that run at user logon.
 
 > Running `irm | iex` executes remote code directly. If you prefer to inspect it first, download `Install.ps1`, review it, then run it locally.
 
@@ -26,6 +26,8 @@ The watcher uses `System.Management.ManagementEventWatcher` with the non-elevate
 Some Xbox/GDK games installed under `XboxGames` are exposed as running from `C:\Program Files\WindowsApps` instead of their visible installation path. The watcher resolves these projected paths through the local Gaming Services package repository and the Content ID markers stored in each Xbox game directory. No per-game process list is required.
 
 The Scheduled Task runs with the normal permissions of the signed-in user; administrator privileges are not required. If WMI event subscriptions are unavailable in a restricted environment, the watcher automatically falls back to lightweight process polling instead of exiting.
+
+The task starts the watcher through Windows Script Host in background mode. PowerShell remains completely hidden while the watcher runs, and the task still tracks its lifetime and exit code.
 
 SISR is only stopped automatically if this watcher started it. If SISR was already running manually, it is left running.
 
