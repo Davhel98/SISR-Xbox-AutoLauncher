@@ -15,7 +15,7 @@ The installer asks for:
 1. The common Xbox Games directory, for example `D:\XboxGames`.
 2. The full path to the SISR executable.
 
-It installs the watcher under `%LOCALAPPDATA%\SISRXboxAutoLauncher` and creates a Scheduled Task that starts it at user logon.
+It installs the watcher and maintenance scripts under `%LOCALAPPDATA%\SISRXboxAutoLauncher` and creates Scheduled Tasks that run at user logon.
 
 > Running `irm | iex` executes remote code directly. If you prefer to inspect it first, download `Install.ps1`, review it, then run it locally.
 
@@ -26,6 +26,14 @@ The watcher subscribes to Windows process start/stop events and checks running e
 SISR is only stopped automatically if this watcher started it. If SISR was already running manually, it is left running.
 
 A short shutdown debounce (default: 5 seconds) avoids stopping SISR during launcher/anti-cheat process transitions.
+
+## Automatic log cleanup
+
+At every user logon, the `SISR Xbox AutoLauncher Log Cleanup` Scheduled Task runs once and deletes log files from:
+
+`%LOCALAPPDATA%\SISRXboxAutoLauncher\logs`
+
+whose last-write time is more than 24 hours old. The cleanup task also runs once immediately after installation.
 
 ## Configuration
 
@@ -41,7 +49,7 @@ Example:
 }
 ```
 
-Re-run the installer to update the watcher or change paths.
+Re-run the installer to update the watcher, cleanup script, or configured paths.
 
 ## Logs
 
@@ -52,3 +60,5 @@ Re-run the installer to update the watcher or change paths.
 ```powershell
 irm "https://raw.githubusercontent.com/Davhel98/SISR-Xbox-AutoLauncher/main/Uninstall.ps1" | iex
 ```
+
+The uninstaller removes both Scheduled Tasks and all locally installed files.
